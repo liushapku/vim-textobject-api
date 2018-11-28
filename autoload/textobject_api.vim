@@ -23,32 +23,9 @@
 " }}}
 " Interface  "{{{1
 
-" func: funcref or string for function name
-" optional: a dictionary containing the following keys
-" 1. nmap: whether define nmap ]mapstr to move to the last position and
-" [mapstr to move to the begin position. default 1
-" 2. visual: can be '' or 'V' or "\<c-v>", used to overwrite the visual mode
-" 3. extend: whether extend the region to include the empty lines following or
-" (only relavant in "move")
-" 4. count: the way to handle count in moving. 'repeat' using for loop. 'callback'
-" handled by callback. 'asis': do not modify the count, propagate to the expr.
-" otherwise remove the count from the expr in "move")
-" 5. options: other map options such as '<buffer> <silent>'
-function! textobject_api#define(mapstr, callback, ...) abort
-  let options = get(a:000, 0, {})
-  let nmap = get(options, 'nmap', 0)
-  let count = get(options, 'count', '')
-  let mapopts = get(options, 'options', '')
-  exe printf("vnoremap %s <expr> %s textobject_api#vmap(%s)", mapopts, a:mapstr, string(a:callback))
-  exe printf("omap %s %s :exe printf('normal %%s%s', visualmode())<cr>", options, a:mapstr, a:mapstr)
-  if nmap
-    call textobject#define_move(a:mapstr, a:func, extend, count, options, visual)
-  endif
-endfunction
-
 let s:motion_wiseness = {'v': 'char', 'V': 'line', "\<c-v>": 'block'}
 let s:visual_mode = { 'char':'v', 'line': 'V', 'block': "\<c-v>"}
-function! textobject_api#vmap(callback)
+function! s:set_pos(callback)
   let info = function(a:callback)()
   let motion_wiseness = get(info, 'motion_wiseness', mode())
   let mode = get(s:visual_mode, motion_wiseness, 'v')
@@ -65,10 +42,18 @@ function! textobject_api#vmap(callback)
     endif
     call setpos("'<", [0, info.begin[0], info.begin[1], 0])
     call setpos("'>", [0, info.end[0], info.end[1], 0])
-    return "gv" . (mode == visualmode()? '':mode)
+    return mode
   catch
     throw v:throwpoint . ':' . v:exception
   endtry
+endfunction
+function! textobject_api#vmap(callback)
+  let mode =  s:set_pos(a:callback)
+  return "gv" . (mode == visualmode()? '':mode)
+endfunction
+function! textobject_api#omap(callback)
+  let vmap = textobject_api#vmap(a:callback)
+  return printf(":normal! %s\<cr>", vmap)
 endfunction
 
 function! textobject_api#extend_forward(motion_wiseness, end)
@@ -133,17 +118,45 @@ function! textobject_api#extend(motion_wiseness, direction, info)
   endif
 endfunction
 
+
+" func: funcref or string for function name
+" optional: a dictionary containing the following keys
+" 1. nmap: whether define nmap ]mapstr to move to the last position and
+" [mapstr to move to the begin position. default 1
+" 2. visual: can be '' or 'V' or "\<c-v>", used to overwrite the visual mode
+" 3. extend: whether extend the region to include the empty lines following or
+" (only relavant in "move")
+" 4. count: the way to handle count in moving. 'repeat' using for loop. 'callback'
+" handled by callback. 'asis': do not modify the count, propagate to the expr.
+" otherwise remove the count from the expr in "move")
+" 5. options: other map options such as '<buffer> <silent>'
+function! textobject_api#define(mapstr, callback, ...) abort
+  let options = get(a:000, 0, {})
+  let nmap = get(options, 'nmap', 0)
+  let count = get(options, 'count', '')
+  let mapopts = get(options, 'options', '')
+  exe printf("vnoremap %s <expr> %s textobject_api#vmap(%s)", mapopts, a:mapstr, string(a:callback))
+  exe printf("onoremap %s <expr> %s textobject_api#omap(%s)", mapopts, a:mapstr, string(a:callback))
+  if nmap
+    call textobject#define_move(a:mapstr, a:func, extend, count, options, visual)
+  endif
+endfunction
+
 function! textobject_api#test()
+  2Log mode(1) visualmode() nvim_get_mode()
   let rv = {}
+  let l1 = get(g:, 'l1', 140)
+  let l2 = get(g:, 'l2', 143)
+  let c1 = get(g:, 'c1', 3)
+  let c2 = get(g:, 'c2', 4)
   "let rv.motion_wiseness = 'line'
-  let rv.begin = [g:A,1]
-  let rv.end = [g:B, 3]
+  let rv.begin = [l1, c1]
+  let rv.end = [l2, c2]
   let rv.extend = 'forward_first'
   return rv
 endfunction
-call textobject_api#define('SS', 'textobject_api#test')
+call textobject_api#define('S', 'textobject_api#test')
 " vim: foldmethod=marker
-
 
 
 " __END__  "{{{1
